@@ -1,5 +1,5 @@
 FROM crazymax/yasu:latest AS yasu
-FROM adoptopenjdk:11-jre-hotspot
+FROM adoptopenjdk:11.0.11_9-jre-hotspot
 
 ENV TZ="UTC" \
   PUID="1000" \
