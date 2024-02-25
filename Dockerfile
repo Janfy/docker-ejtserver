@@ -1,33 +1,36 @@
-FROM openjdk:8-jre-alpine3.7
-MAINTAINER CrazyMax <crazy-max@users.noreply.github.com>
+FROM crazymax/yasu:latest AS yasu
+FROM adoptopenjdk:11-jre-hotspot
 
-ARG BUILD_DATE
-ARG VCS_REF
-ARG VERSION
+ENV TZ="UTC" \
+  PUID="1000" \
+  PGID="1000"
 
-LABEL org.label-schema.build-date=$BUILD_DATE \
-  org.label-schema.name="ejtserver" \
-  org.label-schema.description="EJT License Server image based on Alpine Linux" \
-  org.label-schema.version=$VERSION \
-  org.label-schema.url="https://github.com/crazy-max/docker-ejtserver" \
-  org.label-schema.vcs-ref=$VCS_REF \
-  org.label-schema.vcs-url="https://github.com/crazy-max/docker-ejtserver" \
-  org.label-schema.vendor="CrazyMax" \
-  org.label-schema.schema-version="1.0"
+COPY entrypoint.sh /entrypoint.sh
+COPY --from=yasu / /
 
-ENV EJTSERVER_PATH="/opt/ejtserver" \
-  USERNAME="docker" \
-  UID=1000 GID=1000
-
-ADD entrypoint.sh /entrypoint.sh
-
-RUN apk --update --no-cache add curl tar tzdata \
-  && mkdir -p ${EJTSERVER_PATH} \
+RUN export DEBIAN_FRONTEND="noninteractive" \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    curl \
+    tar \
+    tzdata \
   && chmod a+x /entrypoint.sh \
-  && rm -rf /var/cache/apk/* /tmp/*
+  && mkdir -p /data /opt/ejtserver \
+  && groupadd -f -g ${PGID} ejt \
+  && useradd -o -s /bin/bash -d /data -u ${PUID} -g ejt -m ejt \
+  && chown -R ejt. /data /opt/ejtserver \
+  && ln -sf /opt/ejtserver/bin/admin /usr/local/bin/admin \
+  && ln -sf /opt/ejtserver/bin/ejtserver /usr/local/bin/ejtserver \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 EXPOSE 11862
+WORKDIR /data
 VOLUME [ "/data" ]
 
 ENTRYPOINT [ "/entrypoint.sh" ]
 CMD [ "/usr/local/bin/ejtserver", "start-launchd" ]
+
+HEALTHCHECK --interval=10s --timeout=5s \
+  CMD ejtserver status || exit 1
